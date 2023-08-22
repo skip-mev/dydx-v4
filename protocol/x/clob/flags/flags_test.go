@@ -21,12 +21,13 @@ func TestAddFlagsToCommand(t *testing.T) {
 		fmt.Sprintf("Has %s flag", flags.MaxLiquidationOrdersPerBlock): {
 			flagName: flags.MaxLiquidationOrdersPerBlock,
 		},
-		fmt.Sprintf("Has %s flag", flags.MevTelemetryHost): {
-			flagName: flags.MevTelemetryHost,
+		fmt.Sprintf("Has %s flag", flags.MevTelemetryHosts): {
+			flagName: flags.MevTelemetryHosts,
 		},
 		fmt.Sprintf("Has %s flag", flags.MevTelemetryIdentifier): {
 			flagName: flags.MevTelemetryIdentifier,
-		}}
+		},
+	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -42,23 +43,36 @@ func TestGetFlagValuesFromOptions(t *testing.T) {
 
 		// Expectations.
 		expectedMaxLiquidationOrdersPerBlock uint32
-		expectedMevTelemetryHost             string
+		expectedMevTelemetryHosts            []string
 		expectedMevTelemetryIdentifier       string
 	}{
 		"Sets to default if unset": {
 			expectedMaxLiquidationOrdersPerBlock: flags.DefaultMaxLiquidationOrdersPerBlock,
-			expectedMevTelemetryHost:             flags.DefaultMevTelemetryHost,
+			expectedMevTelemetryHosts:            flags.DefaultMevTelemetryHosts,
 			expectedMevTelemetryIdentifier:       flags.DefaultMevTelemetryIdentifier,
 		},
-		"Sets values from options": {
+		"Sets values from options with one host": {
 			optsMap: map[string]any{
 				flags.MaxLiquidationOrdersPerBlock: uint32(50),
-				flags.MevTelemetryHost:             "https://localhost:13137",
+				flags.MevTelemetryHosts:      "https://localhost:13137",
 				flags.MevTelemetryIdentifier:       "node-agent-01",
 			},
 			expectedMaxLiquidationOrdersPerBlock: uint32(50),
-			expectedMevTelemetryHost:             "https://localhost:13137",
+			expectedMevTelemetryHosts:      []string{"https://localhost:13137"},
 			expectedMevTelemetryIdentifier:       "node-agent-01",
+        },
+		"Sets values from options with multiple hosts": {
+			optsMap: map[string]any{
+				flags.MaxLiquidationOrdersPerBlock: uint32(50),
+				flags.MevTelemetryHosts:      "https://localhost:13137,https://localhost:13337,https://localtest:13537",
+				flags.MevTelemetryIdentifier: "node-agent-01",
+			},
+            expectedMaxLiquidationOrdersPerBlock: uint32(50),
+			expectedMevTelemetryHosts: []string{
+				"https://localhost:13137", "https://localhost:13337",
+				"https://localtest:13537",
+			},
+			expectedMevTelemetryIdentifier: "node-agent-01",
 		},
 	}
 
@@ -73,8 +87,8 @@ func TestGetFlagValuesFromOptions(t *testing.T) {
 			flags := flags.GetClobFlagValuesFromOptions(&mockOpts)
 			require.Equal(
 				t,
-				tc.expectedMevTelemetryHost,
-				flags.MevTelemetryHost,
+				tc.expectedMevTelemetryHosts,
+				flags.MevTelemetryHosts,
 			)
 			require.Equal(
 				t,

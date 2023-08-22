@@ -60,8 +60,10 @@ type (
 	}
 )
 
-var _ types.ClobKeeper = &Keeper{}
-var _ types.MemClobKeeper = &Keeper{}
+var (
+	_ types.ClobKeeper    = &Keeper{}
+	_ types.MemClobKeeper = &Keeper{}
+)
 
 func NewKeeper(
 	cdc codec.BinaryCodec,
@@ -106,7 +108,7 @@ func NewKeeper(
 		txDecoder:                    txDecoder,
 		mevTelemetryConfig: MevTelemetryConfig{
 			Enabled:    clobFlags.MevTelemetryEnabled,
-			Host:       clobFlags.MevTelemetryHost,
+			Hosts:      clobFlags.MevTelemetryHosts,
 			Identifier: clobFlags.MevTelemetryIdentifier,
 		},
 		MaxLiquidationOrdersPerBlock: clobFlags.MaxLiquidationOrdersPerBlock,
