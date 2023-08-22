@@ -2,6 +2,7 @@ package flags
 
 import (
 	"fmt"
+	"strings"
 
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ type ClobFlags struct {
 	MaxLiquidationOrdersPerBlock uint32
 
 	MevTelemetryEnabled    bool
-	MevTelemetryHost       string
+	MevTelemetryHosts      []string
 	MevTelemetryIdentifier string
 }
 
@@ -23,18 +24,21 @@ const (
 
 	// Mev.
 	MevTelemetryEnabled    = "mev-telemetry-enabled"
-	MevTelemetryHost       = "mev-telemetry-host"
+	MevTelemetryHosts      = "mev-telemetry-hosts"
 	MevTelemetryIdentifier = "mev-telemetry-identifier"
 )
 
 // Default values.
+
 const (
 	DefaultMaxLiquidationOrdersPerBlock = 35
 
-	DefaultMevTelemetryEnabled    = false
-	DefaultMevTelemetryHost       = ""
-	DefaultMevTelemetryIdentifier = ""
+	DefaultMevTelemetryEnabled     = false
+    DefaultMevTelemetryHostsFlag   = ""
+	DefaultMevTelemetryIdentifier  = ""
 )
+
+var DefaultMevTelemetryHosts = []string{}
 
 // AddFlagsToCmd adds flags to app initialization.
 // These flags should be applied to the `start` command of the V4 Cosmos application.
@@ -54,14 +58,14 @@ func AddClobFlagsToCmd(cmd *cobra.Command) {
 		"Runs the MEV Telemetry collection agent if true.",
 	)
 	cmd.Flags().String(
-		MevTelemetryHost,
-		DefaultMevTelemetryHost,
-		"Sets the address to connect to for the MEV Telemetry collection agent.",
+		MevTelemetryHosts,
+		DefaultMevTelemetryHostsFlag,
+		"Sets the addresses (comma-delimited) to connect to the MEV Telemetry collection agents.",
 	)
 	cmd.Flags().String(
 		MevTelemetryIdentifier,
 		DefaultMevTelemetryIdentifier,
-		"Sets the identifier to use for MEV Telemetry collection agent.",
+		"Sets the identifier to use for MEV Telemetry collection agents.",
 	)
 }
 
@@ -69,7 +73,7 @@ func GetDefaultClobFlags() ClobFlags {
 	return ClobFlags{
 		MaxLiquidationOrdersPerBlock: DefaultMaxLiquidationOrdersPerBlock,
 		MevTelemetryEnabled:          DefaultMevTelemetryEnabled,
-		MevTelemetryHost:             DefaultMevTelemetryHost,
+		MevTelemetryHosts:            DefaultMevTelemetryHosts,
 		MevTelemetryIdentifier:       DefaultMevTelemetryIdentifier,
 	}
 }
@@ -87,8 +91,8 @@ func GetClobFlagValuesFromOptions(
 		result.MevTelemetryEnabled = v
 	}
 
-	if v, ok := appOpts.Get(MevTelemetryHost).(string); ok {
-		result.MevTelemetryHost = v
+	if v, ok := appOpts.Get(MevTelemetryHosts).(string); ok {
+		result.MevTelemetryHosts = strings.Split(v, ",")
 	}
 
 	if v, ok := appOpts.Get(MevTelemetryIdentifier).(string); ok {
