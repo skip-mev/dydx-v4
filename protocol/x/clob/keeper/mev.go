@@ -74,6 +74,13 @@ func (k Keeper) RecordMevMetrics(
 			)
 		}
 	}()
+	// Add label for consensus round if available.
+	consensusRound, ok := ctx.Value(process.ConsensusRound).(int64)
+	if !ok {
+		k.Logger(ctx).Error("Failed to get consensus round")
+		telemetry.IncrCounter(1, types.ModuleName, metrics.Mev, metrics.Error, metrics.Count)
+		return
+	}
 
 	clobMidPrices, clobPairs := k.GetClobMetadata(ctx)
 
@@ -118,10 +125,12 @@ func (k Keeper) RecordMevMetrics(
 		return
 	}
 
+	cutoff := k.blockTimeKeeper.GetPreviousBlockInfo(ctx).Timestamp.Add(500 * time.Millisecond).Add(time.Duration(3 * consensusRound * int64(time.Second)))
+
 	// Calculate the validator's PnL from regular and liquidation matches.
 	validatorMevMatches, err := k.GetMEVDataFromOperations(
 		ctx,
-		k.GetOperations(ctx).GetOperationsQueue(),
+		k.GetOperationsBeforeCutoff(ctx, cutoff).GetOperationsQueue(),
 		clobPairs,
 	)
 	if err != nil {
@@ -129,7 +138,7 @@ func (k Keeper) RecordMevMetrics(
 			fmt.Sprintf(
 				"Failed to create MEV matches for validator operations: Error: %+v, Operations: %+v",
 				err.Error(),
-				k.GetOperations(ctx).GetOperationsQueue(),
+				k.GetOperationsBeforeCutoff(ctx, cutoff).GetOperationsQueue(),
 			),
 		)
 		telemetry.IncrCounter(1, types.ModuleName, metrics.Mev, metrics.Error, metrics.Count)
@@ -215,14 +224,6 @@ func (k Keeper) RecordMevMetrics(
 	// 		return
 	// 	}
 	// }
-
-	// Add label for consensus round if available.
-	consensusRound, ok := ctx.Value(process.ConsensusRound).(int64)
-	if !ok {
-		k.Logger(ctx).Error("Failed to get consensus round")
-		telemetry.IncrCounter(1, types.ModuleName, metrics.Mev, metrics.Error, metrics.Count)
-		return
-	}
 
 	// Add label for the block proposer.
 	proposerConsAddress := sdk.ConsAddress(ctx.BlockHeader().ProposerAddress)

@@ -381,6 +381,13 @@ func (m *MemClobPriceTimePriority) GetOperationsToReplay(ctx sdk.Context) (
 	return m.operationsToPropose.GetOperationsToReplay()
 }
 
+// GetOperationsBeforeCutoff fetches the operations that appeared before the cutoff
+func (m *MemClobPriceTimePriority) GetOperationsBeforeCutoff(ctx sdk.Context, cutoff time.Time) (
+	operationsQueue []types.OperationRaw,
+) {
+	return m.operationsToPropose.GetOperationsBeforeCutoff(cutoff)
+}
+
 // PlaceOrder will perform the following operations:
 // - Validate the order against memclob in-memory state.
 // - If the newly placed order causes an overlap, match orders within that orderbook.

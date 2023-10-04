@@ -1,11 +1,29 @@
 package types
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"time"
 
 	"github.com/dydxprotocol/v4-chain/protocol/lib"
 	satypes "github.com/dydxprotocol/v4-chain/protocol/x/subaccounts/types"
 )
+
+// InternalOperationHash is used to represent the SHA256 hash of an internal operation.
+type InternalOperationHash [32]byte
+
+func (ioh InternalOperationHash) ToBytes() []byte {
+	return ioh[:]
+}
+
+func (io InternalOperation) GetInternalOperationHash() InternalOperationHash {
+	operationBytes, err := io.Marshal()
+	if err != nil {
+		panic(err)
+	}
+
+	return sha256.Sum256(operationBytes)
+}
 
 // OperationsToPropose is a struct encapsulating data required for determining the operations
 // to propose in a block.
@@ -19,6 +37,8 @@ type OperationsToPropose struct {
 	// This is used in `GetOperationsQueueRaw` for returning a slice of `OperationRaw` for
 	// the purposes of constructing `MsgProposedOperations`.
 	ShortTermOrderHashToTxBytes map[OrderHash][]byte
+
+	InternalOperationHashToTimestamp map[InternalOperationHash]time.Time
 	// A map from order ID to the orders themselves for each order that
 	// was matched. Note: there may be multiple distinct orders with the same
 	// ID that are matched. In that case, only the "greatest" of any such orders
@@ -31,11 +51,12 @@ type OperationsToPropose struct {
 // NewOperationsToPropose returns a new instance of `OperationsToPropose`.
 func NewOperationsToPropose() *OperationsToPropose {
 	return &OperationsToPropose{
-		OperationsQueue:                make([]InternalOperation, 0),
-		OrderHashesInOperationsQueue:   make(map[OrderHash]bool),
-		ShortTermOrderHashToTxBytes:    make(map[OrderHash][]byte),
-		MatchedOrderIdToOrder:          make(map[OrderId]Order),
-		OrderRemovalsInOperationsQueue: make(map[OrderId]bool),
+		OperationsQueue:                  make([]InternalOperation, 0),
+		OrderHashesInOperationsQueue:     make(map[OrderHash]bool),
+		ShortTermOrderHashToTxBytes:      make(map[OrderHash][]byte),
+		MatchedOrderIdToOrder:            make(map[OrderId]Order),
+		OrderRemovalsInOperationsQueue:   make(map[OrderId]bool),
+		InternalOperationHashToTimestamp: make(map[InternalOperationHash]time.Time, 0),
 	}
 }
 
@@ -47,6 +68,7 @@ func (o *OperationsToPropose) ClearOperationsQueue() {
 	o.OrderHashesInOperationsQueue = make(map[OrderHash]bool, 0)
 	o.MatchedOrderIdToOrder = make(map[OrderId]Order)
 	o.OrderRemovalsInOperationsQueue = make(map[OrderId]bool, 0)
+	o.InternalOperationHashToTimestamp = make(map[InternalOperationHash]time.Time, 0)
 }
 
 // MustAddShortTermOrderTxBytes adds the provided Short-Term order hash and TX bytes into
@@ -88,6 +110,7 @@ func (o *OperationsToPropose) MustAddShortTermOrderTxBytes(
 func (o *OperationsToPropose) MustAddShortTermOrderPlacementToOperationsQueue(
 	order Order,
 ) {
+	timestamp := time.Now()
 	order.OrderId.MustBeShortTermOrder()
 
 	orderHash := order.GetOrderHash()
@@ -111,8 +134,12 @@ func (o *OperationsToPropose) MustAddShortTermOrderPlacementToOperationsQueue(
 		)
 	}
 
+	operation := NewShortTermOrderPlacementInternalOperation(order)
+	operationHash := operation.GetInternalOperationHash()
+
 	o.OrderHashesInOperationsQueue[orderHash] = true
-	o.OperationsQueue = append(o.OperationsQueue, NewShortTermOrderPlacementInternalOperation(order))
+	o.InternalOperationHashToTimestamp[operationHash] = timestamp
+	o.OperationsQueue = append(o.OperationsQueue, operation)
 }
 
 // RemoveShortTermOrderTxBytes removes a short term order from `ShortTermOrderHashToTxBytes`.
@@ -156,9 +183,11 @@ func (o *OperationsToPropose) RemoveShortTermOrderTxBytes(
 func (o *OperationsToPropose) MustAddStatefulOrderPlacementToOperationsQueue(
 	order Order,
 ) {
+	timestamp := time.Now()
 	order.OrderId.MustBeStatefulOrder()
 
 	orderHash := order.GetOrderHash()
+
 	if _, exists := o.OrderHashesInOperationsQueue[orderHash]; exists {
 		panic(
 			fmt.Sprintf(
@@ -169,8 +198,13 @@ func (o *OperationsToPropose) MustAddStatefulOrderPlacementToOperationsQueue(
 		)
 	}
 
+	operation := NewPreexistingStatefulOrderPlacementInternalOperation(order)
+	operationHash := operation.GetInternalOperationHash()
+
 	o.OrderHashesInOperationsQueue[orderHash] = true
-	o.OperationsQueue = append(o.OperationsQueue, NewPreexistingStatefulOrderPlacementInternalOperation(order))
+	o.InternalOperationHashToTimestamp[operationHash] = timestamp
+
+	o.OperationsQueue = append(o.OperationsQueue, operation)
 }
 
 // MustAddMatchToOperationsQueue adds a match operation to the
@@ -184,6 +218,8 @@ func (o *OperationsToPropose) MustAddMatchToOperationsQueue(
 	takerMatchableOrder MatchableOrder,
 	makerFillsWithOrders []MakerFillWithOrder,
 ) {
+	timestamp := time.Now()
+
 	makerFills := lib.MapSlice(
 		makerFillsWithOrders,
 		func(mfwo MakerFillWithOrder) MakerFill {
@@ -230,6 +266,10 @@ func (o *OperationsToPropose) MustAddMatchToOperationsQueue(
 		}
 	}
 
+	operationHash := matchOperation.GetInternalOperationHash()
+
+	o.InternalOperationHashToTimestamp[operationHash] = timestamp
+
 	o.OperationsQueue = append(
 		o.OperationsQueue,
 		matchOperation,
@@ -248,6 +288,8 @@ func (o *OperationsToPropose) MustAddDeleveragingToOperationsQueue(
 	perpetualId uint32,
 	fills []MatchPerpetualDeleveraging_Fill,
 ) {
+	timestamp := time.Now()
+
 	if len(fills) == 0 {
 		panic(
 			fmt.Sprintf(
@@ -300,13 +342,14 @@ func (o *OperationsToPropose) MustAddDeleveragingToOperationsQueue(
 		seenSubaccountIds[fill.OffsettingSubaccountId] = true
 	}
 
+	operation := NewMatchPerpetualDeleveragingInternalOperation(liquidatedSubaccountId, perpetualId, fills)
+	operationHash := operation.GetInternalOperationHash()
+
+	o.InternalOperationHashToTimestamp[operationHash] = timestamp
+
 	o.OperationsQueue = append(
 		o.OperationsQueue,
-		NewMatchPerpetualDeleveragingInternalOperation(
-			liquidatedSubaccountId,
-			perpetualId,
-			fills,
-		),
+		operation,
 	)
 }
 
@@ -316,6 +359,8 @@ func (o *OperationsToPropose) MustAddOrderRemovalToOperationsQueue(
 	orderId OrderId,
 	removalReason OrderRemoval_RemovalReason,
 ) {
+	timestamp := time.Now()
+
 	// unspecified removal reason is not allowed
 	if removalReason == OrderRemoval_REMOVAL_REASON_UNSPECIFIED {
 		panic("MustAddOrderRemovalToOperationsQueue: removal reason unspecified")
@@ -325,10 +370,16 @@ func (o *OperationsToPropose) MustAddOrderRemovalToOperationsQueue(
 		panic("MustAddOrderRemovalToOperationsQueue: order removal already exists in operations queue")
 	}
 
+	operation := NewOrderRemovalInternalOperation(orderId, removalReason)
+	operationHash := operation.GetInternalOperationHash()
+
+	o.InternalOperationHashToTimestamp[operationHash] = timestamp
+
 	o.OperationsQueue = append(
 		o.OperationsQueue,
-		NewOrderRemovalInternalOperation(orderId, removalReason),
+		operation,
 	)
+
 	o.OrderRemovalsInOperationsQueue[orderId] = true
 }
 
@@ -415,6 +466,58 @@ func (o *OperationsToPropose) GetOperationsToPropose() []OperationRaw {
 	operationRaws := make([]OperationRaw, 0)
 
 	for _, operation := range o.OperationsQueue {
+		switch operation := operation.Operation.(type) {
+		case *InternalOperation_Match:
+			operationRaws = append(operationRaws, OperationRaw{
+				Operation: &OperationRaw_Match{
+					Match: &ClobMatch{
+						Match: operation.Match.Match,
+					},
+				},
+			})
+		case *InternalOperation_ShortTermOrderPlacement:
+			order := operation.ShortTermOrderPlacement.GetOrder()
+			operationBytes, exists := o.ShortTermOrderHashToTxBytes[order.GetOrderHash()]
+			if !exists {
+				panic(
+					fmt.Sprintf(
+						"GetOperationsToPropose: Order (%s) does not exist in "+
+							"`ShortTermOrderHashToTxBytes`.",
+						order.GetOrderTextString(),
+					),
+				)
+			}
+			operationRaws = append(operationRaws, OperationRaw{
+				Operation: &OperationRaw_ShortTermOrderPlacement{
+					ShortTermOrderPlacement: operationBytes,
+				},
+			})
+		case *InternalOperation_PreexistingStatefulOrder:
+		case *InternalOperation_OrderRemoval:
+			operationRaws = append(operationRaws, OperationRaw{
+				Operation: &OperationRaw_OrderRemoval{
+					OrderRemoval: operation.OrderRemoval,
+				},
+			})
+		default:
+			panic(fmt.Sprintf("GetOperationsToReplay: Unrecognized operation: %+v", operation))
+		}
+	}
+
+	return operationRaws
+}
+
+func (o *OperationsToPropose) GetOperationsBeforeCutoff(cutoff time.Time) []OperationRaw {
+	operationRaws := make([]OperationRaw, 0)
+
+	for _, operation := range o.OperationsQueue {
+		operationHash := operation.GetInternalOperationHash()
+		operationTimestamp := o.InternalOperationHashToTimestamp[operationHash]
+
+		if operationTimestamp.After(cutoff) {
+			continue
+		}
+
 		switch operation := operation.Operation.(type) {
 		case *InternalOperation_Match:
 			operationRaws = append(operationRaws, OperationRaw{

@@ -48,6 +48,13 @@ type MemClob interface {
 	) (
 		operationsQueue []OperationRaw,
 	)
+	GetOperationsBeforeCutoff(
+		ctx sdk.Context,
+		cutoff time.Time,
+	) (
+		operationsQueue []OperationRaw,
+	)
+
 	GetOrder(
 		ctx sdk.Context,
 		orderId OrderId,
