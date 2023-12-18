@@ -12,6 +12,8 @@ import (
 
 	subaccountstypes "github.com/dydxprotocol/v4-chain/protocol/x/subaccounts/types"
 
+	time "time"
+
 	types "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -125,6 +127,22 @@ func (_m *MemClob) GetMidPrice(ctx types.Context, clobPairId clobtypes.ClobPairI
 	}
 
 	return r0, r1
+}
+
+// GetOperationsBeforeCutoff provides a mock function with given fields: ctx, cutoff
+func (_m *MemClob) GetOperationsBeforeCutoff(ctx types.Context, cutoff time.Time) []clobtypes.OperationRaw {
+	ret := _m.Called(ctx, cutoff)
+
+	var r0 []clobtypes.OperationRaw
+	if rf, ok := ret.Get(0).(func(types.Context, time.Time) []clobtypes.OperationRaw); ok {
+		r0 = rf(ctx, cutoff)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]clobtypes.OperationRaw)
+		}
+	}
+
+	return r0
 }
 
 // GetOperationsRaw provides a mock function with given fields: ctx

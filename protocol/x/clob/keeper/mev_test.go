@@ -3,6 +3,7 @@ package keeper_test
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	sdkmath "cosmossdk.io/math"
 
@@ -1006,7 +1007,7 @@ func TestRecordMevMetrics(t *testing.T) {
 				tc.expectedProposerVolumeQuoteQuantums.String(),
 			).Once()
 
-			ctx = ctx.WithLogger(mockLogger)
+			ctx = ctx.WithLogger(mockLogger).WithBlockTime(time.Now())
 			ks.ClobKeeper.RecordMevMetrics(ctx, mockStakingKeeper, mockPerpetualKeeper, tc.proposedOperations)
 
 			mockLogger.AssertExpectations(t)

@@ -46,6 +46,31 @@ func (k Keeper) GetOperations(ctx sdk.Context) *types.MsgProposedOperations {
 	return msgProposedOperations
 }
 
+func (k Keeper) GetOperationsBeforeCutoff(ctx sdk.Context, cutoff time.Time) *types.MsgProposedOperations {
+	operationsQueueBeforeCutoff := k.MemClob.GetOperationsBeforeCutoff(ctx, cutoff)
+
+	msgProposedOperations := &types.MsgProposedOperations{
+		OperationsQueue: operationsQueueBeforeCutoff,
+	}
+
+	if err := msgProposedOperations.ValidateBasic(); err != nil {
+		operations, _ := k.MemClob.GetOperationsToReplay(ctx)
+		panic(fmt.Sprintf("MsgProposedOperations failed validation: %s. Operations to replay: %+v", err, operations))
+	}
+
+	if _, err := types.ValidateAndTransformRawOperations(
+		ctx,
+		operationsQueueBeforeCutoff,
+		k.txDecoder,
+		k.antehandler,
+	); err != nil {
+		operations, _ := k.MemClob.GetOperationsToReplay(ctx)
+		panic(fmt.Sprintf("MsgProposedOperations failed stateful validation: %s. Operations to replay: %+v", err, operations))
+	}
+
+	return msgProposedOperations
+}
+
 // CancelShortTermOrder removes a Short-Term order by `OrderId` (if it exists) from all order-related data structures
 // in the memclob. As well, CancelShortTermOrder adds (or updates) a cancel to the desired `goodTilBlock` in the
 // memclob.
