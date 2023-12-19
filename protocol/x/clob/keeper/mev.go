@@ -381,11 +381,6 @@ func (k Keeper) GetClobMetadata(
 			new(big.Int).SetUint64(uint64(bestAsk.Subticks-bestBid.Subticks)),
 			new(big.Int).SetUint64(uint64(bestBid.Subticks)), // Note that bestBid cannot be 0 if exist is true.
 		).Cmp(MAX_SPREAD_BEFORE_FALLING_BACK_TO_ORACLE) >= 0 {
-			metrics.IncrCounterWithLabels(
-				metrics.MevFallbackToOracle,
-				1,
-				metrics.GetLabelForIntValue(metrics.ClobPairId, int(clobPairId.ToUint32())),
-			)
 			midPriceSubticks = oraclePriceSubticks
 		}
 
