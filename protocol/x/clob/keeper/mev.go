@@ -126,7 +126,8 @@ func (k Keeper) RecordMevMetrics(
 		return
 	}
 
-	cutoff := ctx.BlockTime().Add(500 * time.Millisecond).Add(time.Duration(3 * consensusRound * int64(time.Second)))
+	// use current block time and small buffer
+	cutoff := ctx.BlockTime().Add(500 * time.Millisecond)
 
 	// Calculate the validator's PnL from regular and liquidation matches.
 	validatorMevMatches, err := k.GetMEVDataFromOperations(
